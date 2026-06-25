@@ -7,6 +7,7 @@ import (
 )
 
 type ProcessOrderInput struct {
+	VERSION workflow.Version
 }
 
 type ProcessOrderResult struct {
@@ -20,11 +21,13 @@ type processOrder interface {
 }
 
 func ProcessOrderWorkflow(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
-	return resolveFlowVersion(ctx).run(ctx, input)
+	return resolveFlowVersion(ctx, input.VERSION).run(ctx, input)
 }
 
-func resolveFlowVersion(ctx workflow.Context) processOrder {
-	v := workflow.GetVersion(ctx, flowChangeID, MIN_VERSION, processOrderVersionCurrent)
+func resolveFlowVersion(ctx workflow.Context, v workflow.Version) processOrder {
+	if v == 0 {
+		v = workflow.GetVersion(ctx, flowChangeID, MIN_VERSION, processOrderVersionCurrent)
+	}
 
 	versions := map[workflow.Version]processOrder{
 		1:                          processOrderWorkflowV1{},

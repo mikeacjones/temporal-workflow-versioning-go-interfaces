@@ -57,10 +57,6 @@ func (a *ProcessOrderActivities) GiftWrapOrder(ctx context.Context, input proces
 	}
 }
 
-func (a *ProcessOrderActivities) SendConfirmationEmail(ctx context.Context, input processOrderWorkflow.ProcessOrderInput) (string, error) {
-	return "", nil
-}
-
 // SendThankYou is the step the LATEST workflow version introduced. It currently
 // ships with a bug and always fails. Because activity retries are unbounded by
 // default, latest (v3) orders get *stuck* retrying this step forever rather than

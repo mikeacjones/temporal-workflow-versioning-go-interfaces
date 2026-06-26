@@ -11,7 +11,7 @@ const processOrderVersionCurrent = 4
 
 type processOrderWorkflow struct{}
 
-func (processOrderWorkflow) run(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
+func (w processOrderWorkflow) run(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
 	ao := workflow.ActivityOptions{
 		// Must exceed the sum of all three WorkDuration constants.
 		StartToCloseTimeout: 60 * time.Second,
@@ -48,5 +48,11 @@ func (processOrderWorkflow) run(ctx workflow.Context, input ProcessOrderInput) (
 		return ProcessOrderResult{}, err
 	}
 
+	w.doSomething() //we can still separate logic in workflows this way, and now we don't need a doSomethingV1() doSomethingV2() - each version owns its own implementation, so non-deterministic changes can be safely made
+
 	return ProcessOrderResult{}, nil
+}
+
+func (w *processOrderWorkflow) doSomething() {
+
 }

@@ -7,11 +7,9 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-const processOrderVersionCurrent = 4
+type processOrderWorkflowV3 struct{}
 
-type processOrderWorkflow struct{}
-
-func (processOrderWorkflow) run(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
+func (processOrderWorkflowV3) run(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
 	ao := workflow.ActivityOptions{
 		// Must exceed the sum of all three WorkDuration constants.
 		StartToCloseTimeout: 60 * time.Second,
@@ -33,10 +31,6 @@ func (processOrderWorkflow) run(ctx workflow.Context, input ProcessOrderInput) (
 	}
 
 	if err := workflow.ExecuteActivity(ctx, "GiftWrapOrder", input).Get(ctx, &workResult); err != nil {
-		return ProcessOrderResult{}, err
-	}
-
-	if err := workflow.ExecuteActivity(ctx, "SendConfirmationEmail", input).Get(ctx, &workResult); err != nil {
 		return ProcessOrderResult{}, err
 	}
 

@@ -34,6 +34,7 @@ func resolveFlowVersion(ctx workflow.Context, v workflow.Version) processOrder {
 	versions := map[workflow.Version]processOrder{
 		1:                          processOrderWorkflowV1{},
 		2:                          processOrderWorkflowV2{},
+		3:                          processOrderWorkflowV3{},
 		processOrderVersionCurrent: processOrderWorkflow{},
 	}
 

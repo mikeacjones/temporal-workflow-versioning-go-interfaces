@@ -4,12 +4,12 @@
 #   - One stably-named registered workflow per package: <Name>Workflow. It owns
 #     setup shared across every version — eg registering signal/update channels
 #     and populating <Name>State, threaded to versions via the context.
-#   - resolveFlowVersion() calls workflow.GetVersion once and returns the
-#     implementation func matching that version, which the public workflow calls.
-#   - Each version is a plain func of type <name> (see structs.go); there is no
-#     per-version struct or interface method.
+#   - resolveFlowVersion() calls workflow.GetVersion once and switches to the
+#     implementation matching that version, which the public workflow calls.
+#   - Each version is a struct implementing the <name> interface's run() method
+#     (see structs.go); the resolver returns one via a switch.
 #   - The CURRENT implementation always lives in the stable file
-#     <name>Workflow.go (func <name>Workflow). Cutting a new version COPIES
+#     <name>Workflow.go (struct <name>Workflow). Cutting a new version COPIES
 #     that file to a frozen <name>Workflow_vN.go snapshot, so git blame on the
 #     living file stays clean and in-flight edits are never silently dropped.
 #
@@ -43,7 +43,7 @@ new name:
     inputt="${pascal}Input"
     statet="${pascal}State"
     resultt="${pascal}Result"
-    curfunc="${pkg}"
+    curstruct="${pkg}"
     constname="${camel}VersionCurrent"
     changeid="workflow/${camel}"
     if [ -e "$dir" ]; then echo "error: $dir already exists" >&2; exit 1; fi
@@ -75,7 +75,7 @@ new name:
     // for every version and write what they carry into state. Each version
     // decides what to do with the resulting ${statet}.
 
-    return resolveFlowVersion(ctx, input.VERSION)(ctx, input)
+    return resolveFlowVersion(ctx, input.VERSION).run(ctx, input)
     }
 
     func resolveFlowVersion(ctx workflow.Context, v workflow.Version) ${iface} {
@@ -85,15 +85,12 @@ new name:
     workflow.GetVersion(ctx, flowChangeID, v, v) //adds the version marker and search attribute into history
     }
 
-    versions := map[workflow.Version]${iface}{
-    ${constname}: ${curfunc},
-    }
-
-    version, ok := versions[v]
-    if !ok {
+    switch v {
+    case ${constname}:
+    return ${curstruct}{}
+    default:
     panic(fmt.Sprintf("unsupported %s version %d", flowChangeID, v))
     }
-    return version
     }
     EOF
     cat > "$structs" <<EOF
@@ -114,8 +111,10 @@ new name:
     type ${resultt} struct {
     }
 
-    // Func type every versioned implementation satisfies.
-    type ${iface} func(ctx workflow.Context, input ${inputt}) (${resultt}, error)
+    // Interface every versioned implementation satisfies.
+    type ${iface} interface {
+    run(ctx workflow.Context, input ${inputt}) (${resultt}, error)
+    }
     EOF
     cat > "$stable" <<EOF
     package ${pkg}
@@ -126,7 +125,9 @@ new name:
 
     const ${constname} = 1
 
-    func ${curfunc}(ctx workflow.Context, input ${inputt}) (${resultt}, error) {
+    type ${curstruct} struct{}
+
+    func (${curstruct}) run(ctx workflow.Context, input ${inputt}) (${resultt}, error) {
     // TODO: implement the current version of ${pubfunc} here.
     return ${resultt}{}, nil
     }
@@ -169,28 +170,28 @@ bump name:
     dir="{{workflows_dir}}/${camel}"
     controller="${dir}/${camel}.go"
     stable="${dir}/${pkg}.go"
-    curfunc="${pkg}"
+    curstruct="${pkg}"
     constname="${camel}VersionCurrent"
     if [ ! -f "$stable" ]; then echo "error: $stable not found (run 'just new ${camel}' first)" >&2; exit 1; fi
     if [ ! -f "$controller" ]; then echo "error: $controller not found" >&2; exit 1; fi
     n="$(grep -oE "const ${constname} = [0-9]+" "$stable" | grep -oE '[0-9]+$' || true)"
     if [ -z "$n" ]; then echo "error: could not find 'const ${constname} = <N>' in $stable" >&2; exit 1; fi
     next=$((n + 1))
-    frozenfunc="${pkg}V${n}"
+    frozenstruct="${pkg}V${n}"
     frozen="${dir}/${pkg}_v${n}.go"
     if [ -e "$frozen" ]; then echo "error: $frozen already exists" >&2; exit 1; fi
-    # 1. Freeze the current code: copy stable -> snapshot, rename the func to
+    # 1. Freeze the current code: copy stable -> snapshot, rename the struct to
     #    <pkg>V<n>, and drop the version constant (it lives only in the stable file).
     cp "$stable" "$frozen"
-    perl -i -ne 'if (/^package /){print;next} s/\b'"$curfunc"'\b/'"$frozenfunc"'/g; print unless /^const '"$constname"'\b/;' "$frozen"
+    perl -i -ne 'if (/^package /){print;next} s/\b'"$curstruct"'\b/'"$frozenstruct"'/g; print unless /^const '"$constname"'\b/;' "$frozen"
     # 2. Bump the version constant in the stable (living) file.
     perl -i -pe 's/(const '"$constname"'\s*=\s*)[0-9]+/${1}'"$next"'/' "$stable"
-    # 3. Register the frozen version in the resolver map.
-    perl -i -ne 'print "\t\t'"$n"': '"$frozenfunc"',\n" if /^\s*'"$constname"':/; print;' "$controller"
+    # 3. Register the frozen version in the resolver switch, just before default.
+    perl -i -ne 'print "\tcase '"$n"':\n\t\treturn '"$frozenstruct"'{}\n" if /^\s*default:/ && !$done++; print;' "$controller"
     gofmt -w "$frozen" "$stable" "$controller"
     go build ./...
     echo "Bumped ${camel}: v${n} -> v${next}"
-    echo "  froze v${n} into ${frozen} (func ${frozenfunc}, registered in resolver)"
+    echo "  froze v${n} into ${frozen} (struct ${frozenstruct}, registered in resolver)"
     echo "  ${stable} is now version ${next} — edit it in place for the new behavior."
 
 # Retire old versions: delete their snapshots, drop their resolver entries, and
@@ -220,10 +221,10 @@ retire name version='':
     if [ "$target" -ge "$cur" ]; then echo "error: cannot retire the current version (${cur}); retire only frozen versions (< ${cur})" >&2; exit 1; fi
     # Retire each version in [m .. target]: remove its snapshot and resolver entry.
     for (( v=m; v<=target; v++ )); do
-    frozenfunc="${pkg}V${v}"
+    frozenstruct="${pkg}V${v}"
     frozen="${dir}/${pkg}_v${v}.go"
     if [ -f "$frozen" ]; then rm "$frozen"; else echo "warning: ${frozen} not found, skipping file removal" >&2; fi
-    perl -i -ne 'print unless /^\s*'"$v"':\s*'"$frozenfunc"',/;' "$controller"
+    perl -i -ne 'print unless /^\s*case '"$v"':\s*$/ || /^\s*return '"$frozenstruct"'\{\}/;' "$controller"
     done
     next_min=$((target + 1))
     # Raise MIN_VERSION so GetVersion no longer supports the retired version(s).

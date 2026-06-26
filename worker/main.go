@@ -5,7 +5,6 @@ import (
 
 	"github.com/mikeacjones/temporal-workflow-versioning-go-interfaces/activities"
 	processOrderWorkflow "github.com/mikeacjones/temporal-workflow-versioning-go-interfaces/workflows/processOrder"
-	processPaymentWorkflow "github.com/mikeacjones/temporal-workflow-versioning-go-interfaces/workflows/processPayment"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
@@ -20,7 +19,6 @@ func main() {
 	w := worker.New(c, "process-order-queue", worker.Options{})
 
 	w.RegisterWorkflow(processOrderWorkflow.ProcessOrderWorkflow)
-	w.RegisterWorkflow(processPaymentWorkflow.ProcessPaymentWorkflow)
 	w.RegisterActivity(&activities.ProcessOrderActivities{})
 
 	if err := w.Run(worker.InterruptCh()); err != nil {

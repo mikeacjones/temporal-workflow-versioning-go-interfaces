@@ -6,22 +6,34 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-type ProcessOrderInput struct {
-	VERSION workflow.Version
-}
-
-type ProcessOrderResult struct {
-}
-
 const flowChangeID = "workflow/processOrder"
 const MIN_VERSION = 1
 
-type processOrder interface {
-	run(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error)
-}
+// base pieces that are the same between all versions, eg registering a signal channel, can live here
+// this example shows creating an approval channel and setting state for it automatically. whether a version of the
+// workflow does anything with it or not is controlled by the workflow version
+type ctxKey int
 
+const stateKey ctxKey = 0
+
+// Potentially confusing, but the naming convention right now is ProcessOrderWorkflow = base implementation that is then resolved into
+// processOrderWorkflow (leading edge) or processOrderWorkflowVN
 func ProcessOrderWorkflow(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
-	return resolveFlowVersion(ctx, input.VERSION).run(ctx, input)
+	state := &ProcessOrderState{}
+	ctx = workflow.WithValue(ctx, stateKey, state)
+
+	cancelCh := workflow.GetSignalChannel(ctx, "approve")
+	workflow.Go(ctx, func(ctx workflow.Context) {
+		logger := workflow.GetLogger(ctx)
+		for {
+			var sig ApprovalSignal
+			cancelCh.Receive(ctx, &sig)
+			state.ApprovedBy = sig.ApprovedBy
+			logger.Info("Signal received and set!")
+		}
+	})
+
+	return resolveFlowVersion(ctx, input.VERSION)(ctx, input)
 }
 
 func resolveFlowVersion(ctx workflow.Context, v workflow.Version) processOrder {
@@ -32,10 +44,10 @@ func resolveFlowVersion(ctx workflow.Context, v workflow.Version) processOrder {
 	}
 
 	versions := map[workflow.Version]processOrder{
-		1:                          processOrderWorkflowV1{},
-		2:                          processOrderWorkflowV2{},
-		3:                          processOrderWorkflowV3{},
-		processOrderVersionCurrent: processOrderWorkflow{},
+		1:                          processOrderWorkflowV1,
+		2:                          processOrderWorkflowV2,
+		3:                          processOrderWorkflowV3,
+		processOrderVersionCurrent: processOrderWorkflow,
 	}
 
 	version, ok := versions[v]

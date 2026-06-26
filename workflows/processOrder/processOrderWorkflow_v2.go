@@ -6,9 +6,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-type processOrderWorkflowV2 struct{}
-
-func (processOrderWorkflowV2) run(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
+func processOrderWorkflowV2(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
 	ao := workflow.ActivityOptions{
 		// Must exceed the sum of all three WorkDuration constants.
 		StartToCloseTimeout: 60 * time.Second,

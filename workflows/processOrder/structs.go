@@ -18,4 +18,6 @@ type ProcessOrderResult struct {
 }
 
 // interface that all "versioned" workflows use
-type processOrder func(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error)
+type processOrder interface {
+	run(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error)
+}

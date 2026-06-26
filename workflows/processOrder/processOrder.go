@@ -33,7 +33,7 @@ func ProcessOrderWorkflow(ctx workflow.Context, input ProcessOrderInput) (Proces
 		}
 	})
 
-	return resolveFlowVersion(ctx, input.VERSION)(ctx, input)
+	return resolveFlowVersion(ctx, input.VERSION).run(ctx, input)
 }
 
 func resolveFlowVersion(ctx workflow.Context, v workflow.Version) processOrder {
@@ -43,16 +43,16 @@ func resolveFlowVersion(ctx workflow.Context, v workflow.Version) processOrder {
 		workflow.GetVersion(ctx, flowChangeID, v, v) //adds the version marker and search attribute into history
 	}
 
-	versions := map[workflow.Version]processOrder{
-		1:                          processOrderWorkflowV1,
-		2:                          processOrderWorkflowV2,
-		3:                          processOrderWorkflowV3,
-		processOrderVersionCurrent: processOrderWorkflow,
-	}
-
-	version, ok := versions[v]
-	if !ok {
+	switch v {
+	case processOrderVersionCurrent:
+		return processOrderWorkflow{}
+	case 1:
+		return processOrderWorkflowV1{}
+	case 2:
+		return processOrderWorkflowV2{}
+	case 3:
+		return processOrderWorkflowV3{}
+	default:
 		panic(fmt.Sprintf("unsupported %s version %d", flowChangeID, v))
 	}
-	return version
 }

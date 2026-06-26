@@ -9,7 +9,9 @@ import (
 
 const processOrderVersionCurrent = 4
 
-func processOrderWorkflow(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
+type processOrderWorkflow struct{}
+
+func (processOrderWorkflow) run(ctx workflow.Context, input ProcessOrderInput) (ProcessOrderResult, error) {
 	ao := workflow.ActivityOptions{
 		// Must exceed the sum of all three WorkDuration constants.
 		StartToCloseTimeout: 60 * time.Second,

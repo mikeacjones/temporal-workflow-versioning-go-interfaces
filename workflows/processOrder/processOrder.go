@@ -25,8 +25,10 @@ func ProcessOrderWorkflow(ctx workflow.Context, input ProcessOrderInput) (Proces
 }
 
 func resolveFlowVersion(ctx workflow.Context, v workflow.Version) processOrder {
-	if v == 0 {
+	if v <= 0 {
 		v = workflow.GetVersion(ctx, flowChangeID, MIN_VERSION, processOrderVersionCurrent)
+	} else {
+		workflow.GetVersion(ctx, flowChangeID, v, v) //adds the version marker and search attribute into history
 	}
 
 	versions := map[workflow.Version]processOrder{

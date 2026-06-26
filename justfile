@@ -52,6 +52,7 @@ new name:
     )
 
     type ${inputt} struct {
+    VERSION workflow.Version
     }
 
     type ${resultt} struct {
@@ -65,11 +66,15 @@ new name:
     }
 
     func ${pubfunc}(ctx workflow.Context, input ${inputt}) (${resultt}, error) {
-    return resolveFlowVersion(ctx).run(ctx, input)
+    return resolveFlowVersion(ctx, input.VERSION).run(ctx, input)
     }
 
-    func resolveFlowVersion(ctx workflow.Context) ${iface} {
-    v := workflow.GetVersion(ctx, flowChangeID, MIN_VERSION, ${constname})
+    func resolveFlowVersion(ctx workflow.Context, v workflow.Version) ${iface} {
+    if v <= 0 {
+    v = workflow.GetVersion(ctx, flowChangeID, MIN_VERSION, ${constname})
+    } else {
+    workflow.GetVersion(ctx, flowChangeID, v, v) //adds the version marker and search attribute into history
+    }
 
     versions := map[workflow.Version]${iface}{
     ${constname}: ${curstruct}{},
@@ -99,8 +104,8 @@ new name:
     }
     EOF
     gofmt -w "$controller" "$stable"
-    # Auto-register the new workflow on the worker in main.go.
-    main="main.go"
+    # Auto-register the new workflow on the worker.
+    main="worker/main.go"
     module="$(go list -m 2>/dev/null || true)"
     registered="no"
     if [ -f "$main" ] && [ -n "$module" ] && grep -qF "w.RegisterActivity(" "$main"; then
@@ -120,7 +125,7 @@ new name:
     if [ "$registered" = "yes" ]; then
     echo "Registered ${pkg}.${pubfunc} on the worker in ${main}."
     else
-    echo "Could not auto-edit main.go — register manually:"
+    echo "Could not auto-edit ${main} — register manually:"
     echo "  import ${pkg} \"${module:-<module>}/workflows/${camel}\""
     echo "  w.RegisterWorkflow(${pkg}.${pubfunc})"
     fi
